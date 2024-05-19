@@ -1,5 +1,4 @@
 import numpy as np
-
 from DragonBallEnv import DragonBallEnv
 from typing import List, Tuple, Any
 from typing_extensions import Self
@@ -8,6 +7,8 @@ from collections import deque
 
 
 class Node():
+    __last_node: Self = None
+
     def __init__(self, state: Tuple[int, bool, bool], parent: Self = None, action: int = -1,
                  cost: float = 0.0, g_value: float = 0.0, h_value: int = 0) -> None:
         self.state = state
@@ -16,7 +17,7 @@ class Node():
         self.cost = cost
         self.g_value = g_value
         self.h_value = h_value
-
+        
     @property
     def state(self) -> Tuple[int, bool, bool]:
         return self._state
@@ -27,6 +28,10 @@ class Node():
             raise TypeError
         self._state = state
 
+    @property
+    def hash_key(self) -> Tuple[int, bool, bool]:
+        return self._state
+    
     @property
     def position(self) -> int:
         return self._state[0]
@@ -91,6 +96,19 @@ class Node():
 
     def is_source(self) -> bool:
         return not self.parent
+    
+    def __eq__(self, value: object) -> bool:
+        if self.hash_key == value.hash_key:
+            Node.__last_node = self
+            return True
+        return False
+    
+    def __hash__(self) -> int:
+        return hash(self.hash_key)
+    
+    @staticmethod
+    def get_key_after_check():
+        return Node.__last_node
 
 
 class NodeHeapdict(heapdict.heapdict):
@@ -222,7 +240,7 @@ class BFSAgent(Agent):
                 new_node = Node(state=new_state, parent=curr_node,
                                 action=action, cost=step_cost)
                 # In case new_node not in `open` and not in `close`:
-                if new_node.state not in [n.state for n in open_queue] and new_node.state not in close_set:
+                if new_node not in open_queue and new_node.state not in close_set:
                     if self.is_final_state(new_node):
                         return self.get_solution(new_node)
                     open_queue.append(new_node)
@@ -262,26 +280,6 @@ class WeightedAStarEpsilonAgent(Agent):
             raise TypeError
         self._epsilon = float(epsilon)
 
-    @property
-    def open_queue(self) -> NodeHeapdict:
-        return self._open_queue
-
-    @open_queue.setter
-    def open_queue(self, open_queue: NodeHeapdict):
-        if not isinstance(open_queue, NodeHeapdict):
-            raise TypeError
-        self._open_queue = open_queue
-
-    @property
-    def close_set(self) -> set:
-        return self._close_set
-
-    @close_set.setter
-    def close_set(self, close_set: set):
-        if not isinstance(close_set, set):
-            raise TypeError
-        self._close_set = close_set
-
     def priority(self, node: Node) -> tuple[float, int]:
         if not isinstance(self.env, DragonBallEnv) or not isinstance(self.h_weight, float):
             raise AssertionError("env was not initialized yet.")
@@ -290,17 +288,18 @@ class WeightedAStarEpsilonAgent(Agent):
         return (np.dot([node.g_value, node.h_value], [1-self.h_weight, self.h_weight]), node.position)
 
     def pop_from_open(self) -> Node:
+        node_to_pop: Node = None
         if self.epsilon:
             peek_f_val = self.open_queue.peek_f_val()
             focal_queue = NodeHeapdict()
             for curr_n, curr_p in self.open_queue.items():
                 if curr_p[focal_queue.F_VAL_LOC] <= (1+self.epsilon) * peek_f_val:
                     focal_queue[curr_n] = curr_p
-            min_node = focal_queue.pop_node()
-            del self.open_queue[min_node]
-            return min_node
+            node_to_pop = focal_queue.pop_node()
+            del self.open_queue[node_to_pop]
         else:
-            return self.open_queue.pop_node()
+            node_to_pop = self.open_queue.pop_node()
+        return node_to_pop
 
     def append_to_open(self, node: Node):
         self.open_queue[node] = self.priority(node)
@@ -333,29 +332,25 @@ class WeightedAStarEpsilonAgent(Agent):
                 new_state, step_cost, _ = self.env.step(action)
                 new_node = Node(state=new_state, parent=curr_node, action=action, cost=step_cost,
                                 g_value=curr_node.g_value+step_cost, h_value=self.manhatan_heuristic(new_state))
-                # Switch-case over "new_node in open" and "new_node in close":
-                new_node_in_open = [
-                    n for n in self.open_queue if n.state == new_node.state]
-                new_node_in_close = [
-                    n for n in self.close_set if n.state == new_node.state]
                 """ Probably need to remove
                 # For holes - just append to close_set:
                 if self.terminated_and_not_final_state(new_node):
                     self.close_set.add(new_node)
                     continue
                 """
+                # Switch-case over "new_node in open" and "new_node in close":
+                existed_node_in_open = Node.get_key_after_check() if new_node in self.open_queue else None
+                existed_node_in_close = Node.get_key_after_check() if new_node in self.close_set else None
                 # In case new_node not in `open` and not in `close`:
-                if not new_node_in_open and not new_node_in_close:
+                if not existed_node_in_open and not existed_node_in_close:
                     self.append_to_open(new_node)
-                elif new_node_in_open:
-                    existed_node = new_node_in_open[self.open_queue.NODE_LOC]
-                    if self.priority(new_node) < self.priority(existed_node):
-                        del self.open_queue[existed_node]
+                elif existed_node_in_open:
+                    if self.priority(new_node) < self.priority(existed_node_in_open):
+                        del self.open_queue[existed_node_in_open]
                         self.append_to_open(new_node)
                 else:  # new_node_in_close
-                    existed_node = new_node_in_close[self.open_queue.NODE_LOC]
-                    if self.priority(new_node) < self.priority(existed_node):
-                        self.close_set.remove(existed_node)
+                    if self.priority(new_node) < self.priority(existed_node_in_close):
+                        self.close_set.remove(existed_node_in_close)
                         self.append_to_open(new_node)
         return Agent.get_empty_solotion()
 
