@@ -114,42 +114,46 @@ class Node():
 class NodeHeapdict(heapdict.heapdict):
     @property
     def NODE_LOC(self) -> int:
+        """Location of the `node` in the tuple returned from `popitem()`."""
         return 0
 
     @property
     def PRIORITY_LOC(self) -> int:
+        """Location of the `priority` in the tuple returned from `popitem()`"""
         return 1
 
     @property
     def F_VAL_LOC(self) -> int:
+        """Location of the `f_val` in the `priority` tuple"""
         return 0
 
     @property
     def POS_LOC(self) -> int:
+        """Location of the `position` in the `priority` tuple"""
         return 1
 
-    def pop_node(self):
+    def pop_node(self) -> Node:
         return self.popitem()[self.NODE_LOC]
 
-    def pop_priority(self):
+    def pop_priority(self) -> tuple[float, int]:
         return self.popitem()[self.PRIORITY_LOC]
 
-    def pop_f_val(self):
+    def pop_f_val(self) -> float:
         return self.popitem()[self.PRIORITY_LOC][self.F_VAL_LOC]
 
-    def pop_position(self):
+    def pop_position(self) -> int:
         return self.popitem()[self.PRIORITY_LOC][self.POS_LOC]
 
-    def peek_node(self):
+    def peek_node(self) -> Node:
         return self.peekitem()[self.NODE_LOC]
 
-    def peek_priority(self):
+    def peek_priority(self) -> tuple[float, int]:
         return self.peekitem()[self.PRIORITY_LOC]
 
-    def peek_f_val(self):
+    def peek_f_val(self)  -> float:
         return self.peekitem()[self.PRIORITY_LOC][self.F_VAL_LOC]
 
-    def peek_position(self):
+    def peek_position(self) -> int:
         return self.peekitem()[self.PRIORITY_LOC][self.POS_LOC]
 
 
@@ -294,7 +298,7 @@ class WeightedAStarEpsilonAgent(Agent):
             focal_queue = NodeHeapdict()
             for curr_n, curr_p in self.open_queue.items():
                 if curr_p[focal_queue.F_VAL_LOC] <= (1+self.epsilon) * peek_f_val:
-                    focal_queue[curr_n] = curr_p
+                    focal_queue[curr_n] = (curr_n.g_value, curr_n.position)
             node_to_pop = focal_queue.pop_node()
             del self.open_queue[node_to_pop]
         else:
@@ -332,12 +336,6 @@ class WeightedAStarEpsilonAgent(Agent):
                 new_state, step_cost, _ = self.env.step(action)
                 new_node = Node(state=new_state, parent=curr_node, action=action, cost=step_cost,
                                 g_value=curr_node.g_value+step_cost, h_value=self.manhatan_heuristic(new_state))
-                """ Probably need to remove
-                # For holes - just append to close_set:
-                if self.terminated_and_not_final_state(new_node):
-                    self.close_set.add(new_node)
-                    continue
-                """
                 # Switch-case over "new_node in open" and "new_node in close":
                 existed_node_in_open = Node.get_key_after_check() if new_node in self.open_queue else None
                 existed_node_in_close = Node.get_key_after_check() if new_node in self.close_set else None
