@@ -1,5 +1,5 @@
 <h1 align="center">
-  236501-HW1 
+  Intro-to-AI--Search-Spaces 
 </h1>
 <h3 align="center">
   HW1 assignment
