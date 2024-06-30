@@ -171,7 +171,8 @@ class DragonBallEnv(Env):
             The values are tuples of the form (new state, cost, terminated). 
             Note that terminated is true when the agent reaches a final state or a hole.
         """
-        return self.P[state[0]]
+        func_key = state[0]
+        return self.P[func_key]
 
     def set_state(self, state: Tuple) -> None:
         """
@@ -182,6 +183,12 @@ class DragonBallEnv(Env):
             self.collected_dragon_balls[0] = state[1]
         if self.collected_dragon_balls[1] == False:
             self.collected_dragon_balls[1] = state[2]
+
+
+    def set_state_2(self, state: Tuple) -> None:
+
+        self.s = state
+        self.collected_dragon_balls = [state[1], state[2]]
 
 
     def get_state(self):
